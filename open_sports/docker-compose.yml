@@ -1,0 +1,18 @@
+version: '3'
+services:
+  proxy-tor:
+    build: ../proxy
+  web-api:
+    build: ../web_api
+    volumes:
+      - ../web_api:/usr/src/app
+    ports:
+      - 3001:3001
+    depends_on:
+      - proxy-tor
+  front-end:
+    build: ../front_end
+    ports:
+      - 3000:3000
+    depends_on:
+      - web-api 
