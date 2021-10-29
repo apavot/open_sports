@@ -12,4 +12,4 @@ Installation:
         or on the root folder of the project use the command:
         > docker-compose -f open_sports/docker-compose.yml up
 
-        
+    Open the http://localhost:3000 in a prive mode of your browser.
