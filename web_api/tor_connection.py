@@ -6,29 +6,24 @@ from tornado.web        import Application, RequestHandler
  
 from concurrent.futures import ThreadPoolExecutor 
 
-from parser import setup_connection, dispatch_request
+from base_parser import BaseParsing
+from parser_livetv import LiveTv
 
 import ast
 import json
 
 MAX_WORKERS = 2 
 
-import tornado
 
-print("TORNADO VERSION {}".format(tornado.version))
-
-class TodoItems(RequestHandler):
+class TornadoTest(RequestHandler):
+    
     def get(self):
         self.write("Hello world!")
 
 
-class TodoItem(RequestHandler):
+class TornadoServer(RequestHandler):
     executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
     
-    def __init__(self, *args, **kwargs):
-        super(TodoItem, self).__init__(*args, **kwargs)
-        setup_connection()
-
     def set_default_headers(self):
         self.set_header('Accept', 'application/json')
         self.set_header("Content-type", "application/json")
@@ -38,11 +33,10 @@ class TodoItem(RequestHandler):
 
     @run_on_executor
     def get_page(self, body):
-        return dispatch_request(body)
+        return BaseParsing("//livetv.sx").dispatch_request(body)
     
     @gen.coroutine
     def post(self):
-        print("IP {}".format(self.request.headers.get("X-Forwarded-For")))
         body = ast.literal_eval(self.request.body.decode("utf-8"))
         print("LOG: {}".format(body))
         data = yield self.get_page(body)
@@ -52,9 +46,10 @@ class TodoItem(RequestHandler):
 
 def make_app():
     urls = [
-      ("/", TodoItems),
-      ("/api/item", TodoItem)
+      ("/", TornadoTest),
+      ("/api/item", TornadoServer)
     ]
+    print("Tornado ready")
     return Application(urls, debug=True)
 
 

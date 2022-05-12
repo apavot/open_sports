@@ -1,142 +1,115 @@
+from audioop import add
 import datetime
-from enum import IntFlag
 import re
+import urllib
 
-from bs4 import BeautifulSoup
-
-from utils import request_page
-
-
-class BaseParser:
-
-    URL = "http://livetv.sx"
-    #URL = "http://livetv464.me"
+import utils
 
 
-    def get_game_stream(self, html):
-        streams = []
+class BaseParsing:
+    _instance = {}
+    _register_class = {}
 
-        soup = BeautifulSoup(html, "html.parser")
+    URL = ""
+    REGEX_SUB_PATTERN_URL = ""
+    REGEX_REPL_PATTERN_URL = ""
+    MAIN_LINK = ""
 
-        iframes = soup.find_all("iframe", allowfullscreen=True)
-        if not iframes:
-            return streams
+    def __init_subclass__(cls):
+        """Register Class."""
+        cls._register_class[cls.URL] = cls
 
-        for iframe in iframes:
-            link = iframe.attrs.get("src")
-            if link:
-                streams.append(link)
+    def __new__(cls, url):
+        """Return instance of the class.
 
-        #print(streams) 
-        return streams
+        Args:
+            url (str): Type of the instance to get.
 
-    def get_game_link(self, html):
-        links = []
-        soup = BeautifulSoup(html, "html.parser")
+        Returns:
+            BaseParsing: Instance.
+        """
+        if url not in cls._instance:
+            cls._instance[url] = super().__new__(cls._register_class[url])        
+        return cls._instance[url]
 
-        _a = soup.find_all("a", title="Îòêðûòü â íîâîì îêíå")
-        index = 1 
-        for a in _a:
-            link = a.attrs.get("href")
-            if not link:
-                continue
-            
-            languages = [
-                i.attrs.get("title")
-                for i in a.parent.parent.find_all("img") 
-                if "title" in i.attrs
-            ]
-            language = "{:02}-{}".format(index,  languages[0] or "Unknown")
+    def __init__(self, url):
+        utils.setup_connection()
 
-            links.append(
-                {"link": link, "value": language, "label": language}
-            )
-            index += 1
+    def request_page(self, address, php=False):
+        """
 
-        #print(links)
-        return links
+        Args:
+            address (_type_): _description_
+            php (bool, optional): _description_. Defaults to False.
 
-    def get_first_page_data(self, html):
-        data = {"categories": {}, "games": []}
+        Returns:
+            _type_: _description_
+        """
+        print("Address:", address)
 
-        soup = BeautifulSoup(html, "html.parser")
+        if php:
+           req = urllib.request.Request(
+               address, headers={'User-Agent' : "Magic Browser"}
+           ) 
+        else:
+            req = urllib.request.Request(address) 
 
-        d = soup.select(".main b")
-        cats = []
-        for t in d:
-            attrs = t.parent.attrs
-            if "main" in attrs.get("class", []):
-                name = t.contents[0]
-                link = attrs.get("href")
-                cats.append(
-                    {"link": link, "value": name, "label": name}
-                )     
+        try:
+            response = urllib.request.urlopen(req)
+        except urllib.error.URLError as e:
+            #response = request_page(address, php=php) 
+            print("ERROR URL: {}".format(e.reason))
+            response = ""
 
-        data["categories"] = sorted(cats, key=lambda k:k["label"])
+        return response
 
-        d = soup.find_all("table", width="100%", cellpadding=12, cellspacing=0)
-        live_class = d[0].select(".live") if d else []
-        games = {}
-        for t in live_class:
-            name = t.contents[0]
-            a = t.parent.select(".evdesc")[0].contents
-            date = a[0].replace("\t", "").replace("\n", "")
-            championship = a[-1].replace("\t", "").replace("\n", "")
-            link = t.attrs.get("href")
-
-            key = "{}_{}_{}".format(
-                date, name, championship
-            ).replace(" ", "")
-            try:
-                time_format = re.findall(" ([0-9]+):([0-9]+)", date)[0]
-                date = "{:02}:{} - {}".format(
-                    int(time_format[0]), time_format[1], date.split(" at")[0]
-                )
-            except:
-                date = date
-
-            games[key] = {
-                "value": name,
-                "label": name,
-                "date": date,
-                "championship": championship,
-                "link": link,
-                }
-
-        data["games"] = [value for (k,value) in sorted(games.items())]
-
-        return data
-
-    def check_ip():
+    def _check_ip(self):
         print(datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
         address = "http://checkip.dyndns.org"
-        print("IP ADDERSS: {}".format(request_page(address)))
-       
+        print("IP ADDERSS: {}".format(self.request_page(address)))
+
+    def _build_url(self, link):
+        """Build URL.
+
+        Args:
+            link (str): Part of the url.
+
+        Returns:
+            str: Url to query.
+        """
+        address = "{}{}".format(
+            self.URL_PREFIX,
+            re.sub(
+                self.REGEX_SUB_PATTERN_URL,
+                self.REGEX_REPL_PATTERN_URL,
+                link,
+            )
+        )
+        return address
+
     def dispatch_request(self, body):
+        """Dispatch request.
+
+        Args:
+            body (dict): Information received.
+
+        Returns:
+            dict: Data parsed.
+        """
         _type = body.get("type")
-
-        info = body.get("info", {})
-        if not info:
-            return {}
-
-        link = info.get("link")
+        print(f"TEST {body}")
+        info = body.get(_type, {})
+        link = info.get("link") or self.MAIN_LINK
+        address = self._build_url(link)
+        
         if _type == "main":
-            address = "{}{}".format(self.URL, link)
-            html = request_page(address)
-            return self.get_first_page_data(html)
-        
+            return self.get_first_page_data(address)
         elif _type == "game":
-            address = "{}{}".format(self.URL, link)
-            html = request_page(address)
-            return self.get_game_link(html)
-        
+            return self.get_game_link(address)
         elif _type == "stream":
-            address = "http:{}".format(link)
-            html = request_page(address, php=True)
-            return self.get_game_stream(html)
-        
+            return self.get_game_stream(address)
         elif _type == "test_ip":
-            self.check_ip()
-            return ()
-        else:
-            return {}
+            self._check_ip()
+        
+        return {}
+

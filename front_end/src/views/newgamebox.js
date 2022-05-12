@@ -64,11 +64,13 @@ class NewGameBox extends Component {
             sports: [],
             games: [],
             streams: [],
+            isLoadingSource: false,
             isLoadingCategory: true,
             isLoadingGame: false,
             isLoadingStream: false,
             stream_value: "",
-            stream_link: ""
+            stream_link: "",
+            source: ""
         };
     }
 
@@ -76,7 +78,7 @@ class NewGameBox extends Component {
         axios_instance
         .post(
             'api/item',
-            JSON.stringify({'type': asset_type, "info": {'link': link}})
+            JSON.stringify({'type': asset_type, [asset_type]: {'link': link}})
         )
         .then(res => {
                 if (asset_type == "game"){
@@ -150,6 +152,16 @@ class NewGameBox extends Component {
         
         return(
             <div style={{width: "700px"}}>
+                <Select
+                 placeholder="Select Source..."
+                 options={this.state.source}
+                 styles={customStyles}
+                 //onChange={
+                 //    opt =>
+                 //    this.menu_item_selection(opt.link, "main", opt.value)
+                 //   }
+                 isLoading={this.state.isLoadingSource}
+                 />
                 <Select
                  placeholder="Select Sport..."
                  options={this.state.sports}
